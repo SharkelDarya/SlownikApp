@@ -1,0 +1,262 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Data.SqlClient;
+using System.Data;
+using System.Configuration;
+
+
+namespace SlownikApp
+{
+    public partial class MainWindow : Window
+    {
+        SqlConnection sqlConnection;
+        int tmp; // zmienna dla zmieny jezykow
+        string query; // zmienna dla zapytania do DataBase
+        string[] firstWord = new string[8]; // 8 - ilosc column w DataBase
+        string[] secondWord = new string[8]; // tłumaczenie
+        string[] findPathOfWord = new string[8]; // zmienna dla wyszukiwania słowo od częsci
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            try
+            {
+                // Podłączenie do bazy danych
+                string connectionString = ConfigurationManager.ConnectionStrings["SlownikApp.Properties.Settings.SlownikBDConnectionString"].ConnectionString;
+                sqlConnection = new SqlConnection(connectionString);
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("Problem z połączeniem do bazy danych");
+            }
+        }
+
+        private void SwitchLanguage_Click(object sender, RoutedEventArgs e)
+        {
+            //Zmiana języków
+            tmp = FirstLanguageSelection.SelectedIndex;
+            FirstLanguageSelection.SelectedIndex = SecondLanguageSelection.SelectedIndex;
+            SecondLanguageSelection.SelectedIndex = tmp;
+            //Wyczystić wszystkie pola
+            ClearTextBox();
+        }
+
+        private void Translation_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Zapytanie dla DataBase
+                query = string.Format("select * from {1} where Word = '{0}'", InsetText.Text, FirstLanguageSelection.Text);
+                // Szukamy słowa w bazie danych. 0 - będzie jeden wynik
+                firstWord = PullDataFromDatabase(query, 0);
+                // Wyswietlia dane o pierwszem słowie do TextBox'ów
+                OutputValueToScreen(firstWord);
+                // Szukamy drugie słowa w bazie danych
+                secondWord = FindSecondWord(firstWord);
+                // Wyswietlia dane o drugim słowie do TextBox'ów
+                OutputValueToScreenSecond(secondWord);
+
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("Nie ma danego słowa w słowniku");
+                ClearTextBox();
+            }
+        }
+
+        private void ClearTextBox()
+        {
+            InsetText.Clear(); TranslationText.Clear();
+            Descriptionn.Clear(); DescriptionnSecond.Clear();
+            Form.Clear(); FormSecond.Clear();
+            Similar.Clear(); SimilarSecond.Clear();
+            Sentences.Clear(); SentencesSecond.Clear();
+            PartOfSpeech.Clear(); PartOfSpeechSecond.Clear();
+        }
+        private string[] PullDataFromDatabase(string query, int count)
+        {
+            //Robimy zapytanie do bazy danych
+            SqlDataAdapter sqlDataAdapter = new SqlDataAdapter(query, sqlConnection);
+            //Tworzimy tabele
+            DataTable table = new DataTable();
+            //Tworzimy ciąg ktory bedzie zachołał dane o słowie
+            string[] aboutWord = new string[8];
+            using (sqlDataAdapter)
+            {
+                // To co wydaje baza danych dodajemy do tablicy
+                sqlDataAdapter.Fill(table);
+                for (int i = 0; i < 8; i++)
+                {
+                    //To co  ma tablica przetwarzamy do ciagu
+                    aboutWord[i] = table.Rows[count][i].ToString();
+                        // 0 - id | 1 - word | 2 - descriptionn | 3 - form |
+                        // 4 - similar | 5 - fSentences | 6 - sSentences | 7 - partOfSpeech 
+                }
+                return aboutWord;
+            }
+        }
+
+        private string[] FindSecondWord(string[] firstWord)
+        {
+            switch (SecondLanguageSelection.Text)
+            {
+                // jeżeli tłumaczenie na język polski to bedzie takie zapytanie
+                case "Polish":
+                    query = string.Format("SELECT * FROM Polish p inner join [PL-EN] pe on p.id = pe.IDpolish where pe.IDenglish = {0};", firstWord[0]);
+                    break;
+                // jeżeli tłumaczenie na angielski to bedzie takie zapytanie
+                case "English":
+                    query = string.Format("SELECT * FROM English e inner join [PL-EN] pe on e.id = pe.IDenglish where pe.IDpolish = {0};", firstWord[0]);
+                    break;
+            }
+            //Szukamy słowo w bazie danych
+            string[] secondWord = PullDataFromDatabase(query, 0);
+            return secondWord;
+        }
+        private void OutputValueToScreen(string[] aboutWord)
+        {
+            //Wyświetlamy dane o słowie do TextBox'ów
+            Descriptionn.Text = aboutWord[2];
+            Form.Text = aboutWord[3];
+            Similar.Text = aboutWord[4];
+            Sentences.Text = aboutWord[5] + "\n" + aboutWord[6];
+            PartOfSpeech.Text = aboutWord[7];
+        }
+        private void OutputValueToScreenSecond(string[] aboutWord)
+        {
+            //Wyświetlamy dane o drugim słowie do TextBox'ów
+            TranslationText.Text = aboutWord[1];
+            DescriptionnSecond.Text = aboutWord[2];
+            FormSecond.Text = aboutWord[3];
+            SimilarSecond.Text = aboutWord[4];
+            SentencesSecond.Text = aboutWord[5] + "\n" + aboutWord[6];
+            PartOfSpeechSecond.Text = aboutWord[7];
+        }
+
+        // Funkcja wyświetlia ile słów było znalezono
+        private int FindCount(string query)
+        {
+            // Zapytanie do bazy danych
+            SqlDataAdapter sqlDataAdapter = new SqlDataAdapter(query, sqlConnection);
+            DataTable table = new DataTable();
+            int count;
+            using (sqlDataAdapter)
+            {
+                // table w tym przypadku zachowa liczbe resultatow
+                // czyli ilosc strok
+                sqlDataAdapter.Fill(table);
+                count = int.Parse(table.Rows[0][0].ToString());
+                return count;
+            }
+        }
+        private void partWordSearchBut_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if(partWordSearch.Text != "")
+                {
+                    //Sprawdszamy czy zaznaczone CheckBox który odpowiada za to żeby wyszukiwać ...
+                    // ... słowa od napisanego początku
+                    if (WordBeginning.IsChecked == true)
+                    {
+                        query = string.Format("select COUNT(*) from {1} where Word like '{0}%'", partWordSearch.Text, LanguageSelection.Text);
+                    }
+                    else
+                    {
+                        query = string.Format("select COUNT(*) from {1} where Word like '%{0}%'", partWordSearch.Text, LanguageSelection.Text);
+                    }
+                    // Zapytanie ile slow w bazie ma wprowadzono część
+                    int count = FindCount(query);
+                    Result.Items.Clear();
+                    // Dodajemy slowa do ListBox'a. Będzie dodano tyle słow ile ma zmienna count
+                    for (int i = 0; i < count; i++)
+                    {
+                        // Zapytanie o słowie
+                        // Jeżeli szukamy od początku części słowa wtedy bedzie inne zapytanie
+                        if (WordBeginning.IsChecked == true)
+                        {
+                            query = string.Format("select * from {1} where Word like '{0}%'", partWordSearch.Text, LanguageSelection.Text);
+                        }
+                        else
+                        {
+                            query = string.Format("select * from {1} where Word like '%{0}%'", partWordSearch.Text, LanguageSelection.Text);
+                        }
+                        //najperw slowo w strokie 0, potem 1 i tak dalej
+                        findPathOfWord = PullDataFromDatabase(query, i);
+                        // dodajemy słowo do ListBox'a
+                        Result.Items.Add(findPathOfWord[1]);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("Danego słowa nie ma w słowniku");
+            }
+        }
+
+        private void InsetText_TextChanged(object sender, TextChangedEventArgs e)
+        {
+
+        }
+
+        //Czyści pole dla wprowadzwnia słowa od popszedniego napisanego tekstu
+        private void Click(object sender, MouseButtonEventArgs e)
+        {
+            InsetText.Clear();
+            partWordSearch.Clear();
+        }
+        private void ShowInfoAboutSelectedWord()
+        {
+            try
+            {
+                if(Result.SelectedValue != null)
+                {
+                    // Pokazuje Tab z informacją o słowie
+                    Info.Visibility = Visibility.Visible;
+                    Info.Focus();
+                    string language = "";
+                    //Informacja w jakim języku słowo
+                    switch (LanguageSelection.Text)
+                    {
+                        case "English":
+                            language = " (eng.)"; break;
+                        case "Polish":
+                            language = " (pl.)"; break;
+                    }
+                    //Wyświetlamy informację o słowie w Tab "Info" 
+                    //!!!!!!!!!!!!!!!!!!Придумать норм название!!!!!!Варианты: Opis słowa!!!!!!!!
+                    WordInfo.Text = Result.SelectedValue.ToString() + language;
+                    query = string.Format("select * from {1} where Word = '{0}'", Result.SelectedValue.ToString(), LanguageSelection.Text);
+                    findPathOfWord = PullDataFromDatabase(query, 0);
+                    DescriptionInfo.Text = findPathOfWord[2];
+                    FormInfo.Text = findPathOfWord[3];
+                    PartOfSpeechInfo.Text = findPathOfWord[7];
+                    SimilarInfo.Text = findPathOfWord[4];
+                    SentencesInfo.Text= findPathOfWord[5] + "\n" +findPathOfWord[6];
+                }
+            }catch(Exception)
+            {
+
+            }
+            
+        }
+
+        private void Result_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            //MessageBox.Show("Click");
+            //test.Text = Result.SelectedValue.ToString();
+            ShowInfoAboutSelectedWord();
+        }
+
+        private void CheckBox_Checked(object sender, RoutedEventArgs e)
+        {
+
+        }
+    }
+}
