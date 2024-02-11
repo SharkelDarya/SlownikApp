@@ -230,7 +230,6 @@ namespace SlownikApp
                             language = " (pl.)"; break;
                     }
                     //Wyświetlamy informację o słowie w Tab "Info" 
-                    //!!!!!!!!!!!!!!!!!!Придумать норм название!!!!!!Варианты: Opis słowa!!!!!!!!
                     WordInfo.Text = Result.SelectedValue.ToString() + language;
                     query = string.Format("select * from {1} where Word = '{0}'", Result.SelectedValue.ToString(), LanguageSelection.Text);
                     findPathOfWord = PullDataFromDatabase(query, 0);
