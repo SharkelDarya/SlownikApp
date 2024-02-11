@@ -1,5 +1,5 @@
 <p align="center">
-      <img src="https://ibb.co/JxcwthK" width="726">
+      <img src="https://i.ibb.co/3fT9dJ7/translate-icon-black.jpg" width="726">
 </p>
 
 <p align="center">
